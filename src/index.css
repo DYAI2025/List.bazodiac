@@ -35,7 +35,25 @@
 }
 
 .bento-card {
-  @apply bg-white/[0.03] border border-white/10 rounded-3xl p-6 hover:bg-white/[0.05] transition-all duration-300;
+  @apply bg-white/[0.03] border border-white/10 rounded-3xl p-6 hover:bg-white/[0.05] transition-all duration-300 relative overflow-hidden;
+}
+
+.bento-card::before {
+  content: "";
+  @apply absolute top-0 left-0 w-full h-[1px] bg-linear-to-r from-transparent via-gold/30 to-transparent opacity-0 transition-opacity duration-500;
+}
+
+.bento-card:hover::before {
+  @apply opacity-100;
+}
+
+.bento-card::after {
+  content: "";
+  @apply absolute -right-12 -top-12 w-24 h-24 bg-gold/5 rounded-full blur-2xl opacity-0 transition-opacity duration-500;
+}
+
+.bento-card:hover::after {
+  @apply opacity-100;
 }
 
 /* Custom Hide Scrollbar */
