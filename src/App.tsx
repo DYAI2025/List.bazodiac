@@ -313,59 +313,117 @@ interface MousePosition {
 // --- Dynamic Background Component ---
 
 const CosmicBackground = () => {
-  const [mousePos, setMousePos] = useState<MousePosition>({ x: 0, y: 0 });
-  const [springPos, setSpringPos] = useState<MousePosition>({ x: 0, y: 0 });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mousePos = useRef({ x: 0, y: 0 });
+  const scrollOffset = useRef(0);
+  const starsRef = useRef<any[]>([]);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    const starCount = 120;
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      initStars();
     };
+
+    const initStars = () => {
+      starsRef.current = [];
+      for (let i = 0; i < starCount; i++) {
+        starsRef.current.push({
+          id: i,
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          size: Math.random() * 1.5 + 0.5,
+          speed: Math.random() * 0.05 + 0.01,
+          opacity: Math.random() * 0.5 + 0.2,
+          pulse: 0.01 + Math.random() * 0.02,
+          pulseDir: 1
+        });
+      }
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const offsetX = (mousePos.current.x - window.innerWidth / 2) * 0.01;
+      const offsetY = (mousePos.current.y - window.innerHeight / 2) * 0.01;
+
+      starsRef.current.forEach(star => {
+        // Pulse logic
+        star.opacity += star.pulse * star.pulseDir;
+        if (star.opacity > 0.8 || star.opacity < 0.2) star.pulseDir *= -1;
+
+        // Dynamic position with parallax and scroll
+        const x = (star.x + offsetX * (star.size * 3)) % canvas.width;
+        const y = (star.y + offsetY * (star.size * 3) - scrollOffset.current * (0.05 * star.size)) % canvas.height;
+        
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(212, 175, 55, ${star.opacity})`;
+        ctx.arc(
+          x < 0 ? x + canvas.width : x, 
+          y < 0 ? y + canvas.height : y, 
+          star.size, 0, Math.PI * 2
+        );
+        ctx.fill();
+        
+        if (star.size > 1.2) {
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = 'rgba(212, 175, 55, 0.4)';
+        } else {
+          ctx.shadowBlur = 0;
+        }
+      });
+
+      animationFrameId = requestAnimationFrame(draw);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      mousePos.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const handleScroll = () => {
+      scrollOffset.current = window.scrollY;
+    };
+
+    window.addEventListener('resize', resize);
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+    window.addEventListener('scroll', handleScroll);
+    
+    resize();
+    draw();
 
-  // Smooth mouse following
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSpringPos(prev => ({
-        x: prev.x + (mousePos.x - prev.x) * 0.05,
-        y: prev.y + (mousePos.y - prev.y) * 0.05,
-      }));
-    }, 16);
-    return () => clearInterval(interval);
-  }, [mousePos]);
-
-  // Generate stable star properties once
-  const stars = useMemo(() => {
-    return [...Array(60)].map((_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 2 + 0.5,
-      delay: Math.random() * 5,
-      duration: 3 + Math.random() * 4,
-    }));
+    return () => {
+      window.removeEventListener('resize', resize);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('scroll', handleScroll);
+      cancelAnimationFrame(animationFrameId);
+    };
   }, []);
 
   return (
     <div className="fixed inset-0 -z-10 bg-[#050505] overflow-hidden pointer-events-none">
+      <canvas ref={canvasRef} className="absolute inset-0 opacity-40" />
+      
       {/* Dynamic Gradients */}
-      <div 
-        className="absolute w-[800px] h-[800px] rounded-full blur-[120px] opacity-20 bg-indigo-900/50 transition-transform duration-500"
-        style={{ 
-          transform: `translate(${springPos.x / 12}px, ${springPos.y / 12}px)`,
-          top: '-10%',
-          left: '-10%',
-        }}
-      />
-      <div 
-        className="absolute w-[600px] h-[600px] rounded-full blur-[100px] opacity-15 bg-gold/20 transition-transform duration-700"
-        style={{ 
-          transform: `translate(${springPos.x / 8}px, ${springPos.y / 8}px)`,
-          bottom: '10%',
-          right: '10%',
-        }}
-      />
+      <div className="absolute inset-0 overflow-hidden">
+        <motion.div 
+          animate={{ x: [0, 50, 0], y: [0, 30, 0] }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          className="absolute -top-1/2 -left-1/4 w-full h-full rounded-full blur-[120px] opacity-20 bg-indigo-900/40"
+        />
+        <motion.div 
+          animate={{ x: [0, -40, 0], y: [0, -20, 0] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute -bottom-1/2 -right-1/4 w-full h-full rounded-full blur-[100px] opacity-15 bg-gold/20"
+        />
+      </div>
 
       {/* Grid Pattern */}
       <div className="absolute inset-0 opacity-[0.02]" style={{ 
@@ -380,47 +438,11 @@ const CosmicBackground = () => {
           <circle cx="150" cy="150" r="1.5" fill="#D4AF37" />
         </pattern>
         <rect width="100%" height="100%" fill="url(#grid-pattern)" />
-        
-        {/* Celestial Conic Geometry */}
         <circle cx="50%" cy="50%" r="40%" fill="none" stroke="#D4AF37" strokeWidth="0.5" strokeDasharray="1 10" opacity="0.3" />
         <circle cx="50%" cy="50%" r="30%" fill="none" stroke="#D4AF37" strokeWidth="1" strokeDasharray="4 20" opacity="0.2" />
         <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#D4AF37" strokeWidth="0.5" opacity="0.1" />
         <line x1="50%" y1="0" x2="50%" y2="100%" stroke="#D4AF37" strokeWidth="0.5" opacity="0.1" />
       </svg>
-
-      {/* Reactive Star Field */}
-      {stars.map((star) => (
-        <motion.div
-          key={star.id}
-          initial={{ opacity: 0.1 }}
-          animate={{ 
-            opacity: [0.2, 0.6, 0.2],
-            scale: [1, 1.3, 1],
-          }}
-          transition={{ 
-            duration: star.duration, 
-            repeat: Infinity,
-            delay: star.delay
-          }}
-          className="absolute rounded-full bg-gold/60"
-          style={{ 
-            width: star.size,
-            height: star.size,
-            top: `${star.y}%`,
-            left: `${star.x}%`,
-            transform: `translate(${(springPos.x - window.innerWidth / 2) * 0.02 * (star.id % 10)}px, ${(springPos.y - window.innerHeight / 2) * 0.02 * (star.id % 10)}px)`,
-            boxShadow: star.size > 1.5 ? `0 0 ${star.size * 2}px rgba(212, 175, 55, 0.4)` : 'none'
-          }}
-        />
-      ))}
-
-      {/* Mouse Interaction Layer */}
-      <div 
-        className="absolute inset-0 z-10"
-        style={{ 
-          background: `radial-gradient(circle 500px at ${springPos.x}px ${springPos.y}px, transparent 0%, rgba(5,5,5,0.85) 100%)`
-        }}
-      />
     </div>
   );
 };
@@ -819,6 +841,87 @@ const CelestialEngine = () => {
   );
 };
 
+const ElementalShowcase = ({ lang, t }: { lang: Language, t: any }) => {
+  const [activeElement, setActiveElement] = useState<ElementKey | null>(null);
+
+  return (
+    <section id="elements" className="py-32 px-6 max-w-7xl mx-auto overflow-hidden">
+      <div className="mb-20 text-center relative">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-[10px] font-mono text-gold mb-4 tracking-[0.4em] uppercase"
+        >
+          {t('elements.subtitle')}
+        </motion.div>
+        <motion.h2 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.1 }}
+          className="text-4xl md:text-6xl font-light text-white tracking-tight uppercase mb-6"
+        >
+          {t('elements.title')}
+        </motion.h2>
+        <div className="w-12 h-px bg-gold/30 mx-auto" />
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        {elementKeys.map((key, idx) => (
+          <motion.div 
+            key={key}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: idx * 0.1 }}
+            onHoverStart={() => setActiveElement(key)}
+            onHoverEnd={() => setActiveElement(null)}
+            className={`
+              relative group cursor-pointer rounded-[2.5rem] p-8 transition-all duration-500
+              ${activeElement === key ? 'bg-white/[0.06] border-white/20' : 'bg-white/[0.02] border-white/5'}
+              border flex flex-col items-center text-center bento-card h-full
+            `}
+          >
+            {/* Animated Background Glow */}
+            <AnimatePresence>
+              {activeElement === key && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 0.15, scale: 1.2 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="absolute inset-0 blur-3xl rounded-full pointer-events-none"
+                  style={{ backgroundColor: ELEMENT_CONFIG[key].color }}
+                />
+              )}
+            </AnimatePresence>
+
+            <div className="relative w-32 h-32 mb-8 group-hover:scale-110 transition-transform duration-500">
+              <ElementVisualizer element={key} className="w-full h-full" />
+            </div>
+
+            <h4 
+              className="text-lg font-bold mb-3 uppercase tracking-widest transition-colors duration-500" 
+              style={{ color: activeElement === key ? ELEMENT_CONFIG[key].color : 'rgba(255,255,255,0.9)' }}
+            >
+              {t(`elements.${key}.name`)}
+            </h4>
+            
+            <p className="text-xs text-white/40 leading-relaxed transition-colors duration-500 group-hover:text-white/70">
+              {t(`elements.${key}.description`)}
+            </p>
+
+            <div 
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full transition-all duration-500 opacity-0 group-hover:opacity-100 group-hover:scale-150"
+              style={{ backgroundColor: ELEMENT_CONFIG[key].color, boxShadow: `0 0 10px ${ELEMENT_CONFIG[key].color}` }}
+            />
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 export default function App() {
   const [lang, setLang] = useState<Language>('de');
   const [step, setStep] = useState(1);
@@ -987,7 +1090,7 @@ export default function App() {
               </div>
               <h1 className="text-4xl md:text-6xl font-light leading-tight mb-6 uppercase tracking-tight">
                 {t('hero.headline_1')} <br/>
-                <span className="text-transparent bg-clip-text bg-linear-to-r from-[#CF995F] via-[#F1D18A] to-[#D4AF37] font-medium">
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-[#CF995F] via-[#F1D18A] to-[#D4AF37] font-light">
                   {t('hero.headline_2')}
                 </span>
               </h1>
@@ -1154,33 +1257,8 @@ export default function App() {
           </div>
         </section>
 
-        {/* Five Elements Section */}
-        <section className="py-24 px-6 max-w-7xl mx-auto overflow-hidden">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl mb-4">{t('elements.title')}</h2>
-            <p className="text-muted text-sm uppercase tracking-widest font-mono">{t('elements.subtitle')}</p>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {(Object.keys(ELEMENT_CONFIG) as ElementKey[]).map((key) => (
-              <motion.div 
-                key={key}
-                whileHover={{ y: -5 }}
-                className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 flex flex-col items-center text-center group transition-all hover:bg-white/[0.05]"
-              >
-                <div className="w-20 h-20 mb-6">
-                  <ElementVisualizer element={key} className="w-full h-full" />
-                </div>
-                <h4 className="text-sm font-bold mb-2 uppercase tracking-widest" style={{ color: ELEMENT_CONFIG[key].color }}>
-                  {t(`elements.${key}.name`)}
-                </h4>
-                <p className="text-[10px] text-muted leading-tight opacity-0 group-hover:opacity-100 transition-opacity">
-                  {t(`elements.${key}.description`)}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </section>
+        {/* Interactive Elemental Showcase */}
+        <ElementalShowcase lang={lang} t={t} />
 
         {/* Onboarding Module */}
         <section id="onboarding" className="py-24 px-6 scroll-mt-20">
@@ -1354,51 +1432,70 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="space-y-4 text-left">
-                      <p className="text-xs font-mono text-muted tracking-widest uppercase">{t('success.referral_title')}</p>
-                      <div className="flex gap-2">
-                        <div className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-xs font-mono truncate overflow-hidden">
-                          {referralLink}
+                    <div className="space-y-6 text-left">
+                      <div className="bg-white/[0.03] border border-gold/20 rounded-2xl p-4 shadow-2xl">
+                        <p className="text-[9px] font-mono text-gold tracking-widest uppercase mb-3 opacity-80">{t('success.referral_title')}</p>
+                        <div className="flex gap-2">
+                          <div className="flex-1 bg-black/60 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white/90 truncate overflow-hidden shadow-inner">
+                            {referralLink}
+                          </div>
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(referralLink);
+                              const btn = document.getElementById('copy-btn');
+                              if (btn) {
+                                btn.innerText = t('success.copied');
+                                setTimeout(() => { if (btn) btn.innerText = ''; }, 2000);
+                              }
+                            }}
+                            className="px-4 py-3 bg-gold/10 border border-gold/30 rounded-xl hover:bg-gold/20 transition-all flex items-center justify-center shrink-0"
+                            title="Copy link"
+                          >
+                            <Copy size={18} className="text-gold" />
+                            <span id="copy-btn" className="absolute -top-8 left-1/2 -translate-x-1/2 text-[10px] font-mono text-gold bg-black/80 px-2 py-1 rounded whitespace-nowrap opacity-0 transition-opacity"></span>
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const shareText = lang === 'de' 
+                                ? `Ich habe gerade meine Cosmic Signature bei Bazodiac reserviert. Platz #${waitlistPos} gesichert. Join the sync: ${referralLink} #Bazodiac #CosmicSignature`
+                                : `I just reserved my Cosmic Signature at Bazodiac. Secured position #${waitlistPos}. Join the sync: ${referralLink} #Bazodiac #CosmicSignature`;
+                              window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank');
+                            }}
+                            className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors shrink-0"
+                          >
+                            <Share2 size={18} className="text-white/80" />
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => {
-                            navigator.clipboard.writeText(referralLink);
-                            const btn = document.getElementById('copy-btn');
-                            if (btn) {
-                              btn.innerText = t('success.copied');
-                              setTimeout(() => { if (btn) btn.innerText = ''; }, 2000);
-                            }
-                          }}
-                          className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors flex items-center gap-2"
-                        >
-                          <Copy size={16} />
-                          <span id="copy-btn" className="text-[10px] font-mono text-gold transition-all"></span>
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const shareText = lang === 'de' 
-                              ? `Ich habe gerade meine Cosmic Signature bei Bazodiac reserviert. Platz #${waitlistPos} gesichert. Join the sync: ${referralLink} #Bazodiac #CosmicSignature`
-                              : `I just reserved my Cosmic Signature at Bazodiac. Secured position #${waitlistPos}. Join the sync: ${referralLink} #Bazodiac #CosmicSignature`;
-                            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank');
-                          }}
-                          className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
-                        >
-                          <Share2 size={16} />
-                        </button>
                       </div>
                     </div>
 
                     <div className="mt-12 pt-8 border-t border-white/5">
-                      <h4 className="text-xs font-mono tracking-[0.2em] mb-4 text-muted uppercase">{t('success.rewards')}</h4>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center bg-white/5 border border-white/5 p-3 rounded-lg opacity-50">
-                          <span className="text-xs">{t('success.rewards_3')}</span>
-                          <span className="text-[10px] font-mono text-gold">{t('success.rewards_3_desc')}</span>
-                        </div>
-                        <div className="flex justify-between items-center bg-white/5 border border-white/5 p-3 rounded-lg opacity-50">
-                          <span className="text-xs">{t('success.rewards_10')}</span>
-                          <span className="text-[10px] font-mono text-gold">{t('success.rewards_10_desc')}</span>
-                        </div>
+                      <div className="flex items-center gap-2 mb-6">
+                        <Zap size={14} className="text-gold" />
+                        <h4 className="text-xs font-mono tracking-[0.2em] text-muted uppercase">{t('success.rewards')}</h4>
+                      </div>
+                      <div className="grid gap-3">
+                        <motion.div 
+                          whileHover={{ x: 4 }}
+                          className="flex justify-between items-center bg-white/[0.04] border border-white/5 p-4 rounded-2xl transition-all hover:bg-white/[0.07] hover:border-gold/30 group"
+                        >
+                          <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-mono text-gold mb-1 uppercase tracking-tighter opacity-70">{t('success.rewards_3')}</span>
+                            <span className="text-sm font-semibold text-white/90 group-hover:text-white transition-colors">{t('success.rewards_3_desc')}</span>
+                          </div>
+                          <ChevronRight size={16} className="text-white/20 group-hover:text-gold transition-colors" />
+                        </motion.div>
+                        
+                        <motion.div 
+                          whileHover={{ x: 4 }}
+                          className="flex justify-between items-center bg-white/[0.04] border border-white/5 p-4 rounded-2xl transition-all hover:bg-white/[0.07] hover:border-gold/30 group"
+                        >
+                          <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-mono text-gold mb-1 uppercase tracking-tighter opacity-70">{t('success.rewards_10')}</span>
+                            <span className="text-sm font-semibold text-white/90 group-hover:text-white transition-colors">{t('success.rewards_10_desc')}</span>
+                          </div>
+                          <ChevronRight size={16} className="text-white/20 group-hover:text-gold transition-colors" />
+                        </motion.div>
                       </div>
                     </div>
                   </motion.div>
